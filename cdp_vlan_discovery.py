@@ -1,11 +1,14 @@
 from __future__ import print_function
 
 import ssl
+import sys
+import getpass
 import atexit
 from pprint import pprint
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim, vmodl
+import netw0rk
 
 # Disable SSL certificate verification (for lazy vCenter admins)
 sslContext = ssl.create_default_context()
@@ -85,7 +88,7 @@ def GetArgs():
     if len(sys.argv) != 4:
         host = raw_input("vCenter IP: ")
         user = raw_input("Username: ")
-        password = raw_input("Password: ")
+        password = getpass.getpass("Password: ")
     else:
         host, user, password = sys.argv[1:]
     return host, user, password
@@ -107,10 +110,18 @@ def main():
         print(host)
         vSwitches = host_nics[host]
         for vs in vSwitches:
-            print("  " + vs)
+            #print("  " + vs)
             for nic in vSwitches[vs]:
                 if cdp_neighbors[host][nic] is not None:
                     cdp_neighbor = cdp_neighbors[host][nic]['neighbor']
                     cdp_port = cdp_neighbors[host][nic]['port']
-                    print("\t{} is attached to {} port {}".format(nic, cdp_neighbor, cdp_port))
-                print("\t{} requires VLANs: {}".format(nic, vSwitches[vs][nic])) 
+                    #print("\t{} is attached to {} port {}".format(nic, cdp_neighbor, cdp_port))
+                    try:
+                        d = netw0rk.Device(cdp_neighbors[host][nic]['neighbor'].split('.')[0])
+                        snmp_interfaces = d.interface_vlans
+                        if cdp_port in snmp_interfaces:
+                            add_vlans = vSwitches[vs][nic] - snmp_interfaces[cdp_port]
+                            print("Add {} VLANs to {} port {}".format(add_vlans, cdp_neighbor, cdp_port))
+                    except:
+                        pass
+                #print("\t{} requires VLANs: {}".format(nic, vSwitches[vs][nic])) 
