@@ -123,12 +123,9 @@ def MissingVLANs(hosts, cdp_neighbors, switch_configs):
 
 def GetArgs():
     if len(sys.argv) != 4:
-        #host = raw_input("vCenter IP: ")
-        #user = raw_input("Username: ")
-        #password = getpass.getpass("Password: ")
-        host = 'llc1ccvvc01'
-        user = 'mahanm'
-        password = 'badatg0lf!'
+        host = raw_input("vCenter IP: ")
+        user = raw_input("Username: ")
+        password = getpass.getpass("Password: ")
     else:
         host, user, password = sys.argv[1:]
     return host, user, password
