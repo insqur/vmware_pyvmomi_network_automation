@@ -145,5 +145,5 @@ def main():
     nic_cdp_neighbors = GetCDPNeighbors(content)
     cdp_neighbors = set(NeighborList(nic_cdp_neighbors))
     switch_configs = list(RouterConfigs(cdp_neighbors))
-    missing_vlans = list(MissingVLANs(host_nics, cdp_neighbors, switch_configurations))
+    missing_vlans = list(MissingVLANs(host_nics, cdp_neighbors, switch_configs))
     print(missing_vlans)
