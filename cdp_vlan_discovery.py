@@ -22,6 +22,7 @@ def VSwitchVlans(portgroups):
         vswitch.add(pg.spec.vlanId)
     return _dict
 
+
 def VSwitchPorts(vswitch):
     _dict = {}
     for vs in vswitch:
@@ -29,7 +30,8 @@ def VSwitchPorts(vswitch):
         for port in vs.pnic:
             vswitch.add(port)
     return _dict
-    
+
+
 def GetHostsNicDetail(content):
     print("Gathering host network information ...")
     root_view = content.viewManager.CreateContainerView(content.rootFolder,
@@ -54,7 +56,8 @@ def GetHostsNicDetail(content):
         hosts_nic_config[host.name] = (vSwitch)
     root_view.Destroy()
     return hosts_nic_config
-    
+
+
 def GetCDPNeighbors(content):
     print("Gathering CDP neighbor information ...")
     root_view = content.viewManager.CreateContainerView(content.rootFolder,
@@ -84,11 +87,48 @@ def GetCDPNeighbors(content):
     return hosts_cdp_neighbors
 
 
+def NeighborList(cdp_neighbors):
+    if 'neighbor' in cdp_neighbors:
+        yield cdp_neighbors['neighbor']
+    for h in cdp_neighbors:
+        if isinstance(cdp_neighbors[h], dict):
+            for n in cdp_neighbors[h]:
+                if cdp_neighbors[h][n] is not None:
+                    for v in CDPNeighborList(cdp_neighbors[h][n]):
+                        yield v
+
+
+def RouterConfigs(routers):
+    for r in routers:
+        try:
+            d = netw0rk.Device(r)
+            print(d.interface_vlans)
+            yield {r: d.interface_vlans}
+        except:
+            print("Unable to get data for {}".format(r))
+
+
+def MissingVLANs(hosts, cdp_neighbors, switch_configs):
+    for host in hosts:
+        for vSwitch in hosts[host]:
+            for nic in hosts[host][vSwitch]:
+                vmnic = hosts[host][vSwitch][nic]
+                if cdp_neighbors[host][nic] is not None:
+                    cdp_neighbor = cdp_neighbors[host][nic]['neighbor']
+                    cdp_port = cdp_neighbors[host][nic]['port']
+                    if cdp_port in switch_configs[cdp_neighbor]:
+                        missing_vlans = vmnic - switch_configs[cdp_neighbor][cdp_port]
+                        yield {cdp_neighbor: {'port': cdp_port, 'missing_vlans': missing_vlans}}
+
+
 def GetArgs():
     if len(sys.argv) != 4:
-        host = raw_input("vCenter IP: ")
-        user = raw_input("Username: ")
-        password = getpass.getpass("Password: ")
+        #host = raw_input("vCenter IP: ")
+        #user = raw_input("Username: ")
+        #password = getpass.getpass("Password: ")
+        host = 'llc1ccvvc01'
+        user = 'mahanm'
+        password = 'badatg0lf!'
     else:
         host, user, password = sys.argv[1:]
     return host, user, password
@@ -105,23 +145,8 @@ def main():
     atexit.register(Disconnect, serviceInstance)
     content = serviceInstance.RetrieveContent()
     host_nics = GetHostsNicDetail(content)
-    cdp_neighbors = GetCDPNeighbors(content)
-    for host in host_nics:
-        print(host)
-        vSwitches = host_nics[host]
-        for vs in vSwitches:
-            #print("  " + vs)
-            for nic in vSwitches[vs]:
-                if cdp_neighbors[host][nic] is not None:
-                    cdp_neighbor = cdp_neighbors[host][nic]['neighbor']
-                    cdp_port = cdp_neighbors[host][nic]['port']
-                    #print("\t{} is attached to {} port {}".format(nic, cdp_neighbor, cdp_port))
-                    try:
-                        d = netw0rk.Device(cdp_neighbors[host][nic]['neighbor'].split('.')[0])
-                        snmp_interfaces = d.interface_vlans
-                        if cdp_port in snmp_interfaces:
-                            add_vlans = vSwitches[vs][nic] - snmp_interfaces[cdp_port]
-                            print("Add {} VLANs to {} port {}".format(add_vlans, cdp_neighbor, cdp_port))
-                    except:
-                        pass
-                #print("\t{} requires VLANs: {}".format(nic, vSwitches[vs][nic])) 
+    nic_cdp_neighbors = GetCDPNeighbors(content)
+    cdp_neighbors = set(NeighborList(nic_cdp_neighbors))
+    switch_configs = list(RouterConfigs(cdp_neighbors))
+    missing_vlans = list(MissingVLANs(host_nics, cdp_neighbors, switch_configurations))
+    print(missing_vlans)
